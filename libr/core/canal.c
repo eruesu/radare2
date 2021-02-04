@@ -27,6 +27,13 @@ static void loganal(ut64 from, ut64 to, int depth) {
 	eprintf ("0x%08"PFMT64x" > 0x%08"PFMT64x" %d\r", from, to, depth);
 }
 
+static bool error_too_deep(RCore *core, ut64 at) {
+	if (core->anal->verbose) {
+		eprintf ("Warning: anal.depth limit reached at 0x%08"PFMT64x"\n", at);
+	}
+	return false;
+}
+
 static int cmpsize (const void *a, const void *b) {
 	ut64 as = r_anal_function_linear_size ((RAnalFunction *) a);
 	ut64 bs = r_anal_function_linear_size ((RAnalFunction *) b);
@@ -741,9 +748,7 @@ static bool is_entry_flag(RFlagItem *f) {
 
 static bool __core_anal_fcn(RCore *core, ut64 at, ut64 from, int reftype, int depth) {
 	if (depth < 0) {
-//		printf ("Too deep for 0x%08"PFMT64x"\n", at);
-//		r_sys_backtrace ();
-		return false;
+		return error_too_deep (core, at);
 	}
 	int has_next = r_config_get_i (core->config, "anal.hasnext");
 	RAnalHint *hint = NULL;
@@ -1943,11 +1948,9 @@ static bool is_skippable_addr(RCore *core, ut64 addr) {
  * If the function has been already analyzed, it adds a
  * reference to that fcn */
 R_API bool r_core_anal_fcn(RCore *core, ut64 at, ut64 from, int reftype, int depth) {
-	if (depth < 0) {
-		if (core->anal->verbose) {
-			eprintf ("Message: Early deepness at 0x%08"PFMT64x"\n", at);
-		}
-		return false;
+	if (depth < 1) {
+		return error_too_deep (core, at);
+
 	}
 	if (from == UT64_MAX && is_skippable_addr (core, at)) {
 		if (core->anal->verbose) {
@@ -3488,9 +3491,8 @@ static bool anal_path_exists(RCore *core, ut64 from, ut64 to, RList *bbs, int de
 	RListIter *iter = NULL;
 	RAnalRef *refi;
 
-	if (depth < 0) {
-		eprintf ("going too deep\n");
-		return false;
+	if (depth < 1) {
+		return error_too_deep (core, from);
 	}
 
 	if (!bb) {
@@ -3712,7 +3714,7 @@ static int core_anal_followptr(RCore *core, int type, ut64 at, ut64 ptr, ut64 re
 		r_anal_xrefs_set (core->anal, at, ptr, t);
 		return true;
 	}
-	if (depth < 0) {
+	if (depth < 1) {
 		return false;
 	}
 	int wordsize = (int)(core->anal->bits / 8);
